@@ -1,8 +1,9 @@
-import pandas as pd
-import datetime
 import sys
 import os
-import random, string
+import random
+import string
+import datetime
+
 
 from collections import Counter
 
@@ -10,6 +11,12 @@ from collections import Counter
 from dotenv import load_dotenv
 
 load_dotenv()
+
+try:
+    import pandas as pd
+except ImportError:
+    print("Please install pandas library: pip install pandas")
+    sys.exit(1)
 
 MAU_CLIENTS = os.getenv("MAU_CLIENTS").split(",")
 MAU_EMPTY_ROWS_AFTER = os.getenv("MAU_EMPTY_ROWS_AFTER").split(",")

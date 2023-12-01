@@ -1,14 +1,21 @@
-import pandas as pd
-import datetime
 import sys
 import os
-import random, string
+import random
+import string
+import datetime
 
 # get values from .env file
 from dotenv import load_dotenv
 from collections import Counter
 
 load_dotenv()
+
+try:
+    import pandas as pd
+except ImportError:
+    print("Please install pandas library: pip install pandas")
+    sys.exit(1)
+
 
 SIGNUPS_CLIENTS = os.getenv("SIGNUPS_CLIENTS").split(",")
 SIGNUPS_EMPTY_ROWS_AFTER = os.getenv("SIGNUPS_EMPTY_ROWS_AFTER").split(",")
