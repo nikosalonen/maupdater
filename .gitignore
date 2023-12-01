@@ -3,3 +3,6 @@ output/
 .env
 .DS_Store
 *.csv
+
+__pycache__/
+.pytest_cache/

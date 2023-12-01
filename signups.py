@@ -2,92 +2,122 @@ import pandas as pd
 import datetime
 import sys
 import os
+import random, string
 
 # get values from .env file
 from dotenv import load_dotenv
+from collections import Counter
 
 load_dotenv()
 
 SIGNUPS_CLIENTS = os.getenv("SIGNUPS_CLIENTS").split(",")
 SIGNUPS_EMPTY_ROWS_AFTER = os.getenv("SIGNUPS_EMPTY_ROWS_AFTER").split(",")
 SIGNUPS_RENAMED_CLIENTS = dict(
-  pair.split(",") for pair in os.getenv("SIGNUPS_RENAMED_CLIENTS").split(";")
+    pair.split(",") for pair in os.getenv("SIGNUPS_RENAMED_CLIENTS").split(";")
 )
 
-def reorder_csv(original_filename):
-  """
-  Reorders a CSV file based on the provided configuration and saves it with a new filename.
 
-  Args:
-    original_filename (str): The path of the original CSV file.
+def reorder_signups_csv(original_filename):
+    """
+    Reorders a CSV file based on the provided configuration and saves it with a new filename.
 
-  Returns:
-    None
-  """
-  # read csv file
-  df = pd.read_csv(original_filename, encoding="utf-8")
+    Args:
+      original_filename (str): The path of the original CSV file.
 
-  renamed_clients = SIGNUPS_RENAMED_CLIENTS
+    Returns:
+      None
+    """
 
-  # handle renamed clients
-  CLIENT = "detail.data.client_name"
+    # check that all env variables are set
+    if len(SIGNUPS_CLIENTS) == 1:
+        raise ValueError("SIGNUPS_CLIENTS is not set")
+    if len(SIGNUPS_EMPTY_ROWS_AFTER) == 1:
+        raise ValueError("SIGNUPS_EMPTY_ROWS_AFTER is not set")
+    if len(SIGNUPS_RENAMED_CLIENTS) == 1:
+        raise ValueError("SIGNUPS_RENAMED_CLIENTS is not set")
 
-  df[CLIENT] = df[CLIENT].replace(renamed_clients)
+    # read csv file
+    df = pd.read_csv(original_filename, encoding="utf-8")
 
-  # add missing clients
-  all_clients = SIGNUPS_CLIENTS
+    renamed_clients = SIGNUPS_RENAMED_CLIENTS
 
-  for client in all_clients:
-    if client not in df[CLIENT].values:
-      df = df._append({CLIENT: client, "count": 0}, ignore_index=True)
+    # handle renamed clients
+    CLIENT = "detail.data.client_name"
 
-  # convert count to int
-  df["count"] = df["count"].astype(int)
+    df[CLIENT] = df[CLIENT].replace(renamed_clients)
 
-  # Reorder data based on Excel file order
-  df = df.set_index(CLIENT).reindex(all_clients).reset_index()
+    # add missing clients
+    all_clients = SIGNUPS_CLIENTS
 
-  # notify if there are any missing clients
-  if df["count"].isnull().values.any():
-    print("Missing clients")
+    # check that there are no duplicate values in CLIENT column
+    if not df[CLIENT].is_unique:
+        raise ValueError("Duplicate values found in 'CLIENT' column", df[CLIENT])
 
-  # notify if there are clients that are not in the list
-  if df[CLIENT].isin(all_clients).all() == False:
-    print("There are clients that are not in the list")
-    # print clients that are not in the list
-    print(df[~df[CLIENT].isin(all_clients)][CLIENT].values)
+    for client in all_clients:
+        if client not in df[CLIENT].values:
+            print(f"Source data doesn't have: {client}")
+            df = df._append({CLIENT: client, "count": 0}, ignore_index=True)
 
-  # add empty row after each business area
-  # First empty row after 'Jobly'
-  # Second empty row after 'Vuokraovi'
-  # Third empty row after 'Verkkokirjahylly'
+    # convert count to int
+    df["count"] = df["count"].astype(int)
 
-  # First loop to find clients to add empty rows after
-  clients_to_add_empty_row_after = SIGNUPS_EMPTY_ROWS_AFTER
+    # Reorder data based on Excel file order
+    df = df.set_index(CLIENT).reindex(all_clients).reset_index()
 
-  for client in reversed(clients_to_add_empty_row_after):
-    index = df[df[CLIENT] == client].index[0] + 1
-    new_row = pd.DataFrame({CLIENT: "", "count": pd.NA}, index=[index])
+    # notify if there are any missing clients
+    if df["count"].isnull().values.any():
+        print("Missing clients")
+        print(df[df["count"].isnull()][CLIENT].values)
 
-    df = pd.concat([df.iloc[:index], new_row, df.iloc[index:]]).reset_index(drop=True)
-    if client == "Vuokraovi":
-      # add second empty row after 'Vuokraovi'
-      df = pd.concat([df.iloc[:index], new_row, df.iloc[index:]]).reset_index(
-        drop=True
-      )
+    # notify if there are clients that are not in the all_clients list
+    if df[CLIENT].isin(all_clients).all() == False:
+        print("There are clients that are not in the list")
+        # print clients that are not in the list
+        print(df[~df[CLIENT].isin(all_clients)][CLIENT].values)
 
-  # write to csv
+    # First loop to find clients to add empty rows after
+    clients_to_add_empty_row_after = SIGNUPS_EMPTY_ROWS_AFTER
 
-  # filename is "reordered_" + original + current date + ".csv"
-  # Current date in YYYYMMDD format
-  current_date = datetime.datetime.now().strftime("%Y%m%d")
+    for client in reversed(clients_to_add_empty_row_after):
+        index = df[df[CLIENT] == client].index[0] + 1
+        new_row = pd.DataFrame({CLIENT: "", "count": pd.NA}, index=[index])
 
-  # New filename
-  new_filename = f"reordered_{original_filename[:-4]}_{current_date}.csv"
+        df = pd.concat([df.iloc[:index], new_row, df.iloc[index:]]).reset_index(
+            drop=True
+        )
+        if client == "Vuokraovi":
+            # add second empty row after 'Vuokraovi'
+            df = pd.concat([df.iloc[:index], new_row, df.iloc[index:]]).reset_index(
+                drop=True
+            )
 
-  if not os.path.exists("output"):
-    os.makedirs("output")
+    # write to csv
 
-  df.to_csv(
-    f"output/{new_filename}", index=False, float_format="%.0f", encoding="utf-8-sig"
-  )
+    # filename is "reordered_" + original + current date + ".csv"
+    # Current date in YYYYMMDD format
+    current_date = datetime.datetime.now().strftime("%Y%m%d")
+
+    # create a random word
+    def randomword(length):
+        letters = string.ascii_lowercase
+        return "".join(random.choice(letters) for i in range(length))
+
+    # create a short hash
+    short_hash = str(hash(original_filename + current_date + randomword(5)))[-5:]
+
+    # New filename
+    new_filename = f"reordered_{original_filename[:-4]}_{current_date}_{short_hash}.csv"
+
+    # write path is /output create it if it doesn't exist
+    if not os.path.exists("output"):
+        os.makedirs("output")
+
+    df.to_csv(
+        f"output/{new_filename}", index=False, float_format="%.0f", encoding="utf-8-sig"
+    )
+
+
+# get filename from command line argument
+argv = sys.argv
+
+reorder_signups_csv(argv[1])
